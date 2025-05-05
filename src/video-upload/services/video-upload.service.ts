@@ -197,6 +197,31 @@ export class VideoUploadService {
   }
 
   /**
+   * Get a video asset by ID, but only if the user is the owner
+   * @param assetId The ID of the video asset to retrieve
+   * @param userId The ID of the user making the request
+   * @returns The full video asset details if the user is the owner
+   */
+  async getVideoAssetForOwner(assetId: string, userId: string) {
+    this.logger.log(`Getting video asset ${assetId} for owner ${userId}`);
+    
+    const asset = await this.videoAssetModel.findById(assetId).exec();
+    
+    if (!asset) {
+      throw new NotFoundException(`Video asset with ID ${assetId} not found`);
+    }
+    
+    // Check if the user is the owner of this asset
+    if (String(asset.userId) !== String(userId)) {
+      this.logger.warn(`User ${userId} attempted to access video asset ${assetId} but is not the owner`);
+      throw new ForbiddenException(`User is not authorized to access this video asset`);
+    }
+    
+    // Return the complete asset with all raw data
+    return asset;
+  }
+
+  /**
    * Handle webhook events from Mux
    */
   async handleWebhook(body: any, signature?: string) {

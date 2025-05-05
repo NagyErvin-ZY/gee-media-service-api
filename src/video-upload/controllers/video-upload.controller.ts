@@ -34,7 +34,7 @@ export class VideoUploadController {
     this.logger.log('VideoUploadController initialized');
   }
 
-  @Post('upload')
+  @Get('upload-url')
   @ApiOperation({ 
     summary: 'Create a direct upload URL for a video using a claim',
     description: 'Creates a direct upload URL from Mux for client-side video uploads. No file upload required, the client will upload directly to Mux.'
@@ -44,8 +44,13 @@ export class VideoUploadController {
     required: true, 
     description: 'Claim ID for this upload. Create a claim first via the /api/v1/claim endpoint.' 
   })
+  @ApiQuery({
+    name: 'originalFilename',
+    required: false,
+    description: 'Optional original filename for the video'
+  })
   @ApiResponse({
-    status: 201,
+    status: 200,
     description: 'Direct upload URL created successfully',
     schema: {
       type: 'object',
@@ -72,16 +77,24 @@ export class VideoUploadController {
   async createDirectUpload(
     @UserID() userId: string,
     @Query('claimId') claimId: string,
-    @Body() uploadDto?: Omit<ClaimBasedVideoUploadDto, 'claimId'>,
+    @Query('originalFilename') originalFilename?: string,
+    @Query('params') rawParams?: string,
   ) {
-    this.logger.log(`Received direct upload request: claimId=${claimId}, userId=${userId}`);
+    this.logger.log(`Received direct upload URL request: claimId=${claimId}, userId=${userId}`);
     
     // Generate a UUID for the filename if none was provided - better for security by obscurity
     const { v4: uuidv4 } = require('uuid');
-    const filename = uploadDto?.originalFilename || `video-${uuidv4()}.mp4`;
+    const filename = originalFilename || `video-${uuidv4()}.mp4`;
     
-    // Extract optional params if provided
-    const params = uploadDto?.params || {};
+    // Parse params if provided as a JSON string in query
+    let params = {};
+    if (rawParams) {
+      try {
+        params = JSON.parse(rawParams);
+      } catch (error) {
+        this.logger.warn(`Failed to parse params JSON: ${error.message}`);
+      }
+    }
     
     return this.videoUploadService.createDirectUploadWithClaim(
       userId,
@@ -179,6 +192,32 @@ export class VideoUploadController {
   async getVideoAsset(@Param('id') assetId: string) {
     this.logger.log(`Getting video asset ${assetId}`);
     return this.videoUploadService.getVideoAsset(assetId);
+  }
+
+  @Get(':id/owner')
+  @ApiOperation({ 
+    summary: 'Get complete raw video asset details (owner only)',
+    description: 'Retrieves full raw details of a video asset, only accessible by the owner'
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'The database ID of the video asset to retrieve',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Video asset retrieved successfully',
+  })
+  @ApiResponse({ status: 403, description: 'Forbidden - user is not the owner of this asset' })
+  @ApiResponse({ status: 404, description: 'Video asset not found' })
+  @ApiBearerAuth()
+  @WithDecodedUserJWT()
+  async getVideoAssetRawForOwner(
+    @Param('id') assetId: string,
+    @UserID() userId: string
+  ) {
+    this.logger.log(`Getting raw video asset ${assetId} for owner ${userId}`);
+    const asset = await this.videoUploadService.getVideoAssetForOwner(assetId, userId);
+    return asset;
   }
 
   @Post('webhook')

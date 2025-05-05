@@ -129,4 +129,32 @@ export class ImageUploadController {
     
     return asset;
   }
+
+  @Get('asset/:id/owner')
+  @ApiOperation({ summary: 'Get complete raw image asset details (owner only)' })
+  @ApiParam({
+    name: 'id',
+    description: 'ID of the image asset',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Image asset retrieved successfully with complete raw details',
+  })
+  @ApiResponse({ status: 403, description: 'Forbidden - user is not the owner of this asset' })
+  @ApiResponse({ status: 404, description: 'Image asset not found' })
+  @ApiBearerAuth()
+  @WithDecodedUserJWT()
+  async getImageAssetRawForOwner(
+    @Param('id') assetId: string,
+    @UserID() userId: string
+  ) {
+    this.logger.log(`Getting raw image asset ${assetId} for owner ${userId}`);
+    const asset = await this.imageUploadService.getImageAssetForOwner(assetId, userId);
+    
+    if (!asset) {
+      throw new BadRequestException(`Image asset with ID ${assetId} not found`);
+    }
+    
+    return asset;
+  }
 }

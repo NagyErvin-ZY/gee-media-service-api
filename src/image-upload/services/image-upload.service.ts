@@ -529,4 +529,29 @@ export class ImageUploadService {
         this.logger.log(`Getting image asset with ID: ${recordId}`);
         return this.imageAssetModel.findById(recordId).exec();
     }
+
+    /**
+     * Get an image asset by ID, but only if the user is the owner
+     * @param assetId The ID of the image asset to retrieve
+     * @param userId The ID of the user making the request
+     * @returns The full image asset details if the user is the owner
+     */
+    async getImageAssetForOwner(assetId: string, userId: string) {
+        this.logger.log(`Getting image asset ${assetId} for owner ${userId}`);
+        
+        const asset = await this.imageAssetModel.findById(assetId).exec();
+        
+        if (!asset) {
+            return null;
+        }
+        
+        // Check if the user is the owner of this asset
+        if (String(asset.userId) !== String(userId)) {
+            this.logger.warn(`User ${userId} attempted to access image asset ${assetId} but is not the owner`);
+            throw new ForbiddenException(`User is not authorized to access this image asset`);
+        }
+        
+        // Return the complete asset with all raw data
+        return asset;
+    }
 }
