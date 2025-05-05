@@ -1,5 +1,5 @@
 import * as sharp from 'sharp';
-import { ImageOptions } from '../interfaces/image-options.interface';
+import { ImageOptions, ResolutionOption } from '../interfaces/image-options.interface';
 import { BadRequestException, Logger } from '@nestjs/common';
 import { from, Observable, switchMap, map, catchError, throwError } from 'rxjs';
 import config from '../../config';
@@ -30,6 +30,22 @@ export class ImageProcessor {
       switchMap((metadata) => {
         this.logger.log(`Original image metadata: width=${metadata.width}px, height=${metadata.height}px, format=${metadata.format}`);
         
+        // Aspect ratio check (retryable error)
+        if (options.aspectRatio && metadata.width && metadata.height) {
+          const actualRatio = metadata.width / metadata.height;
+          const [num, denom] = options.aspectRatio.split(':').map(Number);
+          if (num && denom) {
+            const expectedRatio = num / denom;
+            const allowedDeviation = options.allowedDeviation ?? 0.075; // 7.5% default
+            const ratioDiff = Math.abs(actualRatio - expectedRatio) / expectedRatio;
+            if (ratioDiff > allowedDeviation) {
+              const errorMsg = `Aspect ratio ${actualRatio.toFixed(3)} does not match required ${options.aspectRatio} (allowed deviation ${allowedDeviation * 100}%)`;
+              this.logger.warn(errorMsg);
+              return throwError(() => new BadRequestException(errorMsg));
+            }
+          }
+        }
+
         // Validate minimum dimensions if required
         if (
           (options.minWidth && metadata.width && metadata.width < options.minWidth) ||
@@ -91,6 +107,64 @@ export class ImageProcessor {
         }
         this.logger.error(`Error processing image: ${error.message}`, error.stack);
         return throwError(() => new BadRequestException(`Error processing image: ${error.message}`));
+      }),
+    );
+  }
+
+  /**
+   * Process an image at a specific resolution
+   * @param buffer Original image buffer
+   * @param resolution Resolution options
+   * @returns Observable with processed image buffer and metadata
+   */
+  static processImageAtResolution(
+    buffer: Buffer,
+    resolution: ResolutionOption,
+  ): Observable<{ buffer: Buffer; info: sharp.OutputInfo }> {
+    this.logger.log(`Processing image at resolution: ${JSON.stringify(resolution)}`);
+    
+    // Create a sharp instance
+    const image = sharp(buffer);
+    
+    // Remove EXIF and other metadata
+    image.withMetadata({ exif: {} });
+
+    return from(image.metadata()).pipe(
+      switchMap((metadata) => {
+        this.logger.log(`Original image metadata: width=${metadata.width}px, height=${metadata.height}px, format=${metadata.format}`);
+        
+        // Resize to the specified dimensions
+        this.logger.log(`Resizing image to: ${resolution.width}x${resolution.height}`);
+        image.resize({
+          width: resolution.width,
+          height: resolution.height,
+          fit: 'inside',
+          withoutEnlargement: true,
+        });
+
+        // Convert to WebP with specified or default quality
+        const quality = resolution.quality ?? config.media.defaultQuality;
+        this.logger.log(`Converting to WebP format with quality: ${quality}`);
+        image.webp({
+          quality: quality,
+          effort: 6, // Higher compression effort
+        });
+
+        // Get the processed buffer
+        return from(image.toBuffer({ resolveWithObject: true })).pipe(
+          map((result) => {
+            const buffer = ('buffer' in result ? result.buffer : result.data) as Buffer;
+            this.logger.log(`Resolution processing completed. Result size: ${buffer.length} bytes, dimensions: ${result.info.width}x${result.info.height}`);
+            return {
+              buffer: buffer,
+              info: result.info
+            };
+          })
+        );
+      }),
+      catchError((error) => {
+        this.logger.error(`Error processing image resolution: ${error.message}`, error.stack);
+        return throwError(() => new BadRequestException(`Error processing image resolution: ${error.message}`));
       }),
     );
   }

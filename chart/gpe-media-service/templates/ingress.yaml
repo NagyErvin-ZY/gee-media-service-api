@@ -1,0 +1,26 @@
+{{- if .Values.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "gpe-media-service.fullname" . }}
+  labels:
+    {{- include "gpe-media-service.labels" . | nindent 4 }}
+  annotations:
+{{ toYaml .Values.ingress.annotations | indent 4 }}
+spec:
+  ingressClassName: {{ .Values.ingress.className | quote }}
+  rules:
+  - http:
+      paths:
+      - path: /media-service/(.*)
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: {{ include "gpe-media-service.fullname" . }}
+            port:
+              number: {{ .Values.service.port }}
+  {{- if .Values.ingress.tls }}
+  tls:
+    {{- toYaml .Values.ingress.tls | nindent 4 }}
+  {{- end }}
+{{- end }}

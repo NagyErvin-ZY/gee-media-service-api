@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, ListObjectsV2Command, DeleteObjectsCommand } from '@aws-sdk/client-s3';
 import config from '../config';
 import { Observable, from, map, catchError, throwError } from 'rxjs';
 
@@ -63,5 +63,55 @@ export class AwsS3Service {
         return throwError(() => new Error(`Failed to upload file to S3: ${error.message}`));
       })
     );
+  }
+
+  /**
+   * Delete a folder (prefix) and all its contents from S3
+   * @param folderPrefix The folder prefix to delete
+   * @returns Promise that resolves when deletion is complete
+   */
+  async deleteFolder(folderPrefix: string): Promise<void> {
+    this.logger.log(`Deleting folder from S3: ${folderPrefix}`);
+
+    try {
+      // List all objects in the folder
+      const listCommand = new ListObjectsV2Command({
+        Bucket: config.aws.s3.bucket,
+        Prefix: folderPrefix,
+      });
+
+      const listedObjects = await this.s3Client.send(listCommand);
+      
+      if (!listedObjects.Contents || listedObjects.Contents.length === 0) {
+        this.logger.log(`No objects found in folder: ${folderPrefix}`);
+        return;
+      }
+
+      this.logger.log(`Found ${listedObjects.Contents.length} objects to delete in folder: ${folderPrefix}`);
+
+      // Create a list of objects to delete
+      const deleteParams = {
+        Bucket: config.aws.s3.bucket,
+        Delete: {
+          Objects: listedObjects.Contents.map(({ Key }) => ({ Key })),
+          Quiet: false
+        }
+      };
+
+      // Delete the objects
+      const deleteCommand = new DeleteObjectsCommand(deleteParams);
+      const deleteResult = await this.s3Client.send(deleteCommand);
+      
+      this.logger.log(`Successfully deleted ${deleteResult.Deleted?.length || 0} objects from folder: ${folderPrefix}`);
+      
+      // Check if we need to do another delete (if there were more than 1000 objects)
+      if (listedObjects.IsTruncated) {
+        this.logger.log(`Folder deletion was truncated, continuing deletion for: ${folderPrefix}`);
+        await this.deleteFolder(folderPrefix);
+      }
+    } catch (error) {
+      this.logger.error(`Error deleting folder from S3: ${error.message}`, error.stack);
+      throw new Error(`Failed to delete folder from S3: ${error.message}`);
+    }
   }
 }

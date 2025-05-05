@@ -65,4 +65,13 @@ export class UploadImageDto {
   @Max(100)
   @Type(() => Number)
   quality?: number;
+
+  @ApiProperty({
+    description: 'Profile name for upload (e.g., profile_picture)',
+    required: false,
+    type: String,
+    example: 'profile_picture',
+  })
+  @IsOptional()
+  profileName?: string;
 }

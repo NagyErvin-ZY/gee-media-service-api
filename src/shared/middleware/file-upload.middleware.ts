@@ -1,4 +1,4 @@
-import { Injectable, NestMiddleware, Logger } from '@nestjs/common';
+import { Injectable, NestMiddleware, Logger, PayloadTooLargeException } from '@nestjs/common';
 import { Request, Response, NextFunction } from 'express';
 import * as multer from 'multer';
 import config from '../../config';
@@ -44,12 +44,41 @@ export class FileUploadMiddleware implements NestMiddleware {
     this.logger.log(`Request received: ${req.method} ${req.path}`);
     
     // Only use this middleware for routes that handle file uploads
-    if (req.path.includes('/upload/')) {
+    if (req.path.includes('/upload/') || req.path === '/api/v1/upload') {
       this.logger.log('Upload route detected, applying file upload middleware');
       
-      // Use multer's single file upload handler named 'file'
+      // DDOS Prevention Step 1: Check Content-Length header before processing the request
+      // This prevents clients from sending files that are much larger than our limit
+      const contentLength = req.headers['content-length'] ? parseInt(req.headers['content-length'], 10) : 0;
+      
+      // Add a buffer to account for multipart form data overhead (20% more than our actual limit)
+      const headerSizeLimit = Math.ceil(config.media.maxFileSize * 1.2);
+      
+      if (contentLength > headerSizeLimit) {
+        const errorMessage = `Request body too large: ${contentLength} bytes. Maximum allowed size is ${config.media.maxFileSize} bytes`;
+        this.logger.warn(`Rejecting oversized request based on Content-Length header: ${errorMessage}`);
+        return res.status(413).json({
+          statusCode: 413,
+          message: errorMessage,
+          error: 'Payload Too Large'
+        });
+      }
+      
+      // DDOS Prevention Step 2: Use multer's file size limits to validate the actual file size
+      // This will be enforced during the actual file processing
       this.upload.single('file')(req, res, (err) => {
         if (err) {
+          if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
+            // This is a file size limit error from multer
+            const errorMessage = `File size exceeds the limit of ${config.media.maxFileSize / (1024 * 1024)} MB`;
+            this.logger.warn(`Multer file size limit exceeded: ${errorMessage}`);
+            return res.status(413).json({
+              statusCode: 413,
+              message: errorMessage,
+              error: 'Payload Too Large'
+            });
+          }
+          
           this.logger.error(`Multer error: ${err.message}`, err.stack);
           return res.status(400).json({
             statusCode: 400,
@@ -72,6 +101,17 @@ export class FileUploadMiddleware implements NestMiddleware {
           return res.status(400).json({
             statusCode: 400,
             message: 'No file uploaded',
+          });
+        }
+        
+        // DDOS Prevention Step 3: Final verification of the file size in memory
+        if (req.file.size > config.media.maxFileSize) {
+          const errorMessage = `File size of ${req.file.size} bytes exceeds the limit of ${config.media.maxFileSize} bytes`;
+          this.logger.warn(`Final size validation failed: ${errorMessage}`);
+          return res.status(413).json({
+            statusCode: 413,
+            message: errorMessage,
+            error: 'Payload Too Large'
           });
         }
         

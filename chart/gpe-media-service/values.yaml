@@ -1,0 +1,60 @@
+# Default values for gpe-media-service Helm chart.
+
+# Application image settings
+image:
+  repository: 274267893613.dkr.ecr.eu-central-1.amazonaws.com/gpe/services/media
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+# Image pull secrets for private registries (ECR)
+imagePullSecrets:
+  - name: ecr-secret
+
+# Number of pod replicas
+replicaCount: 1
+
+# Kubernetes service settings
+service:
+  type: NodePort
+  # NodePort for direct host access when ingress is enabled
+  nodePort: 30081
+  port: 3000
+
+# AWS S3 configuration
+awsAccessKeyId: ""
+awsSecretAccessKey: ""
+awsRegion: "eu-central-1"
+awsS3Bucket: "gpe-media"
+
+# Resource requests and limits
+resources: {}
+#  requests:
+#    cpu: 100m
+#    memory: 128Mi
+#  limits:
+#    cpu: 500m
+#    memory: 512Mi
+
+# Non-sensitive environment variables (ConfigMap)
+port: 3000
+logLevel: "info"
+maxFileSize: "5mb"
+allowedImageTypes: "image/jpeg,image/png,image/gif"
+
+# Ingress configuration
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    nginx.ingress.kubernetes.io/rewrite-target: "/$1"
+    nginx.ingress.kubernetes.io/use-regex: "true"
+  hosts:
+    - host: "192.168.49.2"
+      paths:
+        - path: /media-service/(.*)
+          pathType: ImplementationSpecific
+  tls: [] # Example:
+  #  - secretName: chart-example-tls
+  #    hosts:
+  #      - example.local
