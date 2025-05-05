@@ -107,26 +107,26 @@ export class ImageUploadController {
   }
 
   @Get('record/:id')
-  @ApiOperation({ summary: 'Get a specific image upload record by ID' })
+  @ApiOperation({ summary: 'Get a specific image asset by ID' })
   @ApiParam({
     name: 'id',
-    description: 'ID of the upload record',
+    description: 'ID of the image asset',
   })
   @ApiResponse({
     status: 200,
-    description: 'Upload record retrieved successfully',
+    description: 'Image asset retrieved successfully',
   })
-  @ApiResponse({ status: 404, description: 'Upload record not found' })
+  @ApiResponse({ status: 404, description: 'Image asset not found' })
   @ApiBearerAuth()
   @WithDecodedUserJWT()
-  async getUploadRecord(@Param('id') recordId: string) {
-    this.logger.log(`Getting image upload record with ID: ${recordId}`);
-    const record = await this.imageUploadService.getRecordById(recordId);
+  async getImageAsset(@Param('id') assetId: string) {
+    this.logger.log(`Getting image asset with ID: ${assetId}`);
+    const asset = await this.imageUploadService.getRecordById(assetId);
     
-    if (!record) {
-      throw new BadRequestException(`Upload record with ID ${recordId} not found`);
+    if (!asset) {
+      throw new BadRequestException(`Image asset with ID ${assetId} not found`);
     }
     
-    return record;
+    return asset;
   }
 }

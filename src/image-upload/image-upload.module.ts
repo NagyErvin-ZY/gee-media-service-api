@@ -1,7 +1,7 @@
 import { Module, MiddlewareConsumer, RequestMethod, forwardRef } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { AwsModule } from '../aws/aws.module';
-import { UploadRecord, UploadRecordSchema } from '../shared/schemas/upload-record.schema';
+import { ImageAsset, ImageAssetSchema } from '../shared/schemas/image-asset.schema';
 import { ImageUploadController } from './controllers/image-upload.controller';
 import { ImageProcessorService } from './services/image-processor.service';
 import { ImageUploadService } from './services/image-upload.service';
@@ -12,7 +12,7 @@ import { UploadClaimModule } from '../upload-claim/upload-claim.module';
 @Module({
   imports: [
     MongooseModule.forFeature([
-      { name: UploadRecord.name, schema: UploadRecordSchema },
+      { name: ImageAsset.name, schema: ImageAssetSchema },
     ]),
     AwsModule,
     ModerationModule,

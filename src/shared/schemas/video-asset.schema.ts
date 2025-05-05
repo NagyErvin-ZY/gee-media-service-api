@@ -2,8 +2,7 @@ import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Schema as MongooseSchema } from 'mongoose';
 import { UploadClaim } from '../../upload-claim/schemas/upload-claim.schema';
 
-export type MuxUploadStatus = 'waiting' | 'processing' | 'completed' | 'errored' | 'cancelled';
-export type MuxAssetStatus = 'preparing' | 'ready' | 'errored' | 'deleted';
+export type MuxUploadStatus = 'waiting' | 'processing' | 'complete' | 'failed' | 'cancelled';
 
 @Schema({ timestamps: true })
 export class VideoAsset extends Document {
@@ -32,22 +31,24 @@ export class VideoAsset extends Document {
   muxUploadId?: string;
 
   @Prop()
-  muxUploadStatus?: MuxUploadStatus;
+  muxDirectUploadId?: string;
 
-  @Prop()
-  muxUploadUrl?: string;
+  @Prop({ 
+    type: String,
+    enum: ['waiting', 'processing', 'complete', 'failed', 'cancelled'],
+    default: 'waiting'
+  })
+  muxUploadStatus?: MuxUploadStatus;
 
   @Prop()
   muxAssetId?: string;
 
-  @Prop()
-  muxAssetStatus?: MuxAssetStatus;
-
-  @Prop()
-  muxPlaybackId?: string;
-
-  @Prop({ type: Object })
-  muxAssetData?: Record<string, any>;
+  @Prop({ 
+    type: String,
+    enum: ['preparing', 'ready', 'errored', 'deleted'],
+    default: 'preparing'
+  })
+  status?: string;
 
   @Prop()
   thumbnailUrl?: string;
@@ -56,13 +57,16 @@ export class VideoAsset extends Document {
   gifThumbnailUrl?: string;
 
   @Prop()
+  playbackUrl?: string;
+
+  @Prop()
   errorMessage?: string;
 
   @Prop({ type: MongooseSchema.Types.Mixed })
-  uploadParams?: Record<string, any>;
+  customParams?: Record<string, any>;
 
-  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'UploadClaim' })
-  claim?: UploadClaim;
+  @Prop({ type: String })
+  claimId?: string;
 
   @Prop({ default: [] })
   tags: string[];
@@ -79,9 +83,6 @@ export class VideoAsset extends Document {
   @Prop()
   description?: string;
 
-  @Prop()
-  status?: string;
-
   @Prop({ default: 'private' })
   accessLevel?: string;
 
@@ -90,9 +91,18 @@ export class VideoAsset extends Document {
     default: () => ({})
   })
   muxInfo?: {
-    uploadId?: string;
     assetId?: string;
     playbackId?: string;
+    hlsPlaybackUrl?: string;
+    mp4PlaybackUrl?: string;
+    thumbnailUrl?: string;
+    animatedGifUrl?: string;
+    posterUrl?: string;
+    duration?: number;
+    aspectRatio?: string;
+    resolution?: string;
+    createdAt?: string;
+    tracks?: any[];
   };
 }
 
@@ -101,5 +111,7 @@ export const VideoAssetSchema = SchemaFactory.createForClass(VideoAsset);
 // Indexes
 VideoAssetSchema.index({ userId: 1, profileName: 1 });
 VideoAssetSchema.index({ muxUploadId: 1 });
+VideoAssetSchema.index({ muxDirectUploadId: 1 });
 VideoAssetSchema.index({ muxAssetId: 1 });
+VideoAssetSchema.index({ claimId: 1 });
 VideoAssetSchema.index({ createdAt: -1 });

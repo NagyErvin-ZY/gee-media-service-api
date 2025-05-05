@@ -249,7 +249,8 @@ export class UploadClaimService {
         const retryableFailureReasons = [
           'File processing error.',
           'Server error during processing.',
-          'Content moderation failed'
+          'Content moderation failed',
+          'Error creating video upload'
         ];
         
         if (claim.reason && retryableFailureReasons.includes(claim.reason)) {
@@ -277,8 +278,8 @@ export class UploadClaimService {
   async getRateLimitInfo(userId: string, uploadProfile: string): Promise<any> {
     this.logger.log(`Getting rate limit info for user ${userId} and profile ${uploadProfile}`);
     
-    // Get the upload profile configuration
-    const profile = config.media.uploadProfiles.find(p => p.name === uploadProfile);
+    // Get the upload profile configuration using our enhanced method that checks both image and video profiles
+    const profile = this.getUploadProfile(uploadProfile);
     if (!profile) {
       throw new BadRequestException(`Upload profile ${uploadProfile} not found`);
     }
@@ -369,8 +370,29 @@ export class UploadClaimService {
    * @param profileName The name of the profile to retrieve
    * @returns The upload profile or null if not found
    */
-  private getUploadProfile(profileName: string): UploadProfile | null {
-    return config.media.uploadProfiles.find(profile => profile.name === profileName) || null;
+  private getUploadProfile(profileName: string): any {
+    // First check if it's an image profile
+    const imageProfile = config.media.uploadProfiles.find(profile => profile.name === profileName);
+    if (imageProfile) {
+      return imageProfile;
+    }
+    
+    // If not found, check if it's a video profile
+    const videoProfile = config.videoProfiles.find(profile => profile.name === profileName);
+    if (videoProfile) {
+      // Convert video profile to a format compatible with upload profiles
+      return {
+        name: videoProfile.name,
+        type: 'video',
+        // Add minimal rateLimit to maintain compatibility
+        rateLimit: {
+          maxUploads: 30,  // Default limit
+          periodDays: 30   // Default period
+        }
+      };
+    }
+    
+    return null;
   }
 
   /**

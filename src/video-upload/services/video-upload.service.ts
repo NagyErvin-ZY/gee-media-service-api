@@ -2,7 +2,6 @@ import { Injectable, Logger, NotFoundException, BadRequestException, ForbiddenEx
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { VideoAsset } from '../../shared/schemas/video-asset.schema';
-import { UploadRecord } from '../../shared/schemas/upload-record.schema';
 import { VideoProcessorService } from './video-processor.service';
 import { UploadClaimService } from '../../upload-claim/upload-claim.service';
 import config from '../../config';
@@ -13,7 +12,6 @@ export class VideoUploadService {
 
   constructor(
     @InjectModel(VideoAsset.name) private videoAssetModel: Model<VideoAsset>,
-    @InjectModel(UploadRecord.name) private uploadRecordModel: Model<UploadRecord>,
     private readonly videoProcessorService: VideoProcessorService,
     private readonly uploadClaimService: UploadClaimService
   ) {
@@ -40,8 +38,8 @@ export class VideoUploadService {
     try {
       const claim = await this.uploadClaimService.validateClaimForUpload(claimId);
       
-      // Check if the user ID matches the claim requestor
-      if (claim.claimRequestorUserId !== userId) {
+      // Check if the user ID matches the claim requestor - fix string comparison issues
+      if (String(claim.claimRequestorUserId).trim() !== String(userId).trim()) {
         const errorMsg = `User ${userId} is not authorized to use claim ${claimId}`;
         this.logger.warn(errorMsg);
         throw new ForbiddenException(errorMsg);
@@ -72,9 +70,20 @@ export class VideoUploadService {
         claimId
       );
       
-      this.logger.log(`Direct upload created successfully: ${result.uploadId}`);
+      this.logger.log(`Direct upload created successfully: ${result.muxDirectUploadId}`);
       
-      return result;
+      // Return the upload information
+      return {
+        uploadId: result.uploadId,
+        url: result.uploadUrl,
+        muxDirectUploadId: result.muxDirectUploadId,
+        assetId: result.asset._id ? result.asset._id.toString() : undefined,
+        profileName,
+        maxSizeBytes: profile.maxSizeBytes,
+        maxDurationSeconds: profile.maxDurationSeconds,
+        allowedFormats: profile.allowedFormats,
+      };
+      
     } catch (error) {
       this.logger.error(`Error creating direct upload with claim: ${error.message}`, error.stack);
       
@@ -104,17 +113,32 @@ export class VideoUploadService {
   async checkUploadStatus(uploadId: string) {
     this.logger.log(`Checking status of upload ${uploadId}`);
     
-    const asset = await this.videoAssetModel.findOne({ muxUploadId: uploadId }).exec();
+    const asset = await this.videoAssetModel.findOne({ 
+      $or: [
+        { muxUploadId: uploadId },
+        { muxDirectUploadId: uploadId },
+        { muxAssetId: uploadId }
+      ] 
+    }).exec();
     
     if (!asset) {
       throw new NotFoundException(`Upload with ID ${uploadId} not found`);
     }
     
     // If the asset has a claim ID, check if we need to update the claim status
-    if (asset.claim) {
+    if (asset.claimId) {
       try {
-        // We need to convert ObjectId to string if needed
-        const claimId = asset.claim.toString();
+        // Safely convert claimId to string - fixing TypeScript error
+        let claimId: string;
+        
+        // For Mongoose ObjectId (which has toString method)
+        if (asset.claimId && typeof asset.claimId === 'object' && asset.claimId !== null) {
+          // Using any type assertion to bypass TypeScript error
+          claimId = (asset.claimId as any).toString();
+        } else {
+          // For string or other types
+          claimId = String(asset.claimId);
+        }
         
         const claim = await this.uploadClaimService.getClaim(claimId);
         
@@ -173,13 +197,31 @@ export class VideoUploadService {
   }
 
   /**
-   * Handle webhook events from video service provider (like Mux)
+   * Handle webhook events from Mux
    */
   async handleWebhook(body: any, signature?: string) {
-    this.logger.log(`Received webhook of type: ${body.type}`);
+    this.logger.log(`Received webhook of type: ${body.type || 'unknown'}`);
     
-    // In a real implementation, we would verify the webhook signature
-    // and process different event types
+    // Process the webhook using the processor service
+    const result = await this.videoProcessorService.handleMuxWebhook(body, signature);
+    
+    if (result) {
+      this.logger.log(`Successfully processed webhook: ${body.type}`);
+      
+      // Check if we need to update claim status for any affected asset
+      if (body.type === 'video.asset.ready' || body.type === 'video.asset.errored') {
+        const assetId = body.data?.id;
+        if (assetId) {
+          // Find the asset and update related claim if needed
+          const asset = await this.videoAssetModel.findOne({ muxAssetId: assetId }).exec();
+          if (asset && asset.claimId) {
+            await this.checkUploadStatus(assetId);
+          }
+        }
+      }
+    } else {
+      this.logger.warn(`Failed to process webhook: ${body.type}`);
+    }
     
     return { status: 'received' };
   }

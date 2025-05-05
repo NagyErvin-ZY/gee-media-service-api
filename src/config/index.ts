@@ -96,7 +96,7 @@ const config = Object.freeze<GPEUserServiceConfig>({
           ]
         },
         rateLimit: {
-          maxUploads: parseEnv<number>(process.env.PROFILE_PIC_MAX_UPLOADS, 30), // Default: 3 uploads
+          maxUploads: parseEnv<number>(process.env.PROFILE_PIC_MAX_UPLOADS, 300), // Default: 3 uploads
           periodDays: parseEnv<number>(process.env.PROFILE_PIC_PERIOD_DAYS, 30), // Default: 30 days
         },
       }

@@ -8,7 +8,7 @@ import { UploadResult } from '../../shared/interfaces/upload-result.interface';
 import config from '../../config';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-import { UploadRecord } from '../../shared/schemas/upload-record.schema';
+import { ImageAsset } from '../../shared/schemas/image-asset.schema';
 import { UploadClaimService } from '../../upload-claim/upload-claim.service';
 import { ModerationService, ModerationResult } from '../../moderation/moderation.service';
 
@@ -42,7 +42,7 @@ export class ImageUploadService {
         private readonly imageProcessorService: ImageProcessorService,
         private readonly uploadClaimService: UploadClaimService,
         private readonly moderationService: ModerationService,
-        @InjectModel(UploadRecord.name) private uploadRecordModel: Model<UploadRecord>
+        @InjectModel(ImageAsset.name) private imageAssetModel: Model<ImageAsset>
     ) {
         this.logger.log('ImageUploadService initialized');
     }
@@ -411,7 +411,6 @@ export class ImageUploadService {
     ): void {
         const recordData: any = {
             userId,
-            mediaType: 'image',
             profileName,
             storageUrl: mainImageUrl,
             fileSize: mainImageInfo.buffer.length,
@@ -419,24 +418,53 @@ export class ImageUploadService {
             height: mainImageInfo.info.height,
             format: 'webp',
             originalFilename,
-            claim: claimId
+            claimId: claimId
         };
 
-        // Add resolution metadata if available
+        // Format resolutions data to match our new schema structure
         if (resolutionUrls) {
-            recordData.metadata = { resolutions: resolutionUrls };
+            recordData.resizedVersions = {};
+            
+            // Convert the simple URL map to more structured data
+            Object.entries(resolutionUrls).forEach(([suffix, url]) => {
+                // Extract necessary information for each resolution
+                let width = 0;
+                let height = 0;
+                
+                // Try to get dimensions from profile config
+                const profile = config.media.uploadProfiles.find(p => p.name === profileName);
+                if (profile && profile.constraints && profile.constraints.resolutions) {
+                    const resolutionConfig = profile.constraints.resolutions.find(r => r.suffix === suffix);
+                    if (resolutionConfig) {
+                        width = resolutionConfig.width;
+                        height = resolutionConfig.height;
+                    }
+                }
+                
+                // Extract storage key from URL
+                const urlParts = url.split('/');
+                const storageKey = urlParts.slice(3).join('/');
+                
+                // Add to resizedVersions object
+                recordData.resizedVersions[suffix] = {
+                    url: url,
+                    width: width,
+                    height: height,
+                    storageKey: storageKey
+                };
+            });
         }
 
         // Include moderation warning in record if available
         if (moderationWarning) {
-            if (!recordData.metadata) recordData.metadata = {};
-            recordData.metadata.moderationWarning = moderationWarning;
+            if (!recordData.metaData) recordData.metaData = {};
+            recordData.metaData.moderationWarning = moderationWarning;
         }
 
-        const record = new this.uploadRecordModel(recordData);
+        const record = new this.imageAssetModel(recordData);
 
         record.save().catch(error => {
-            this.logger.error(`Failed to save upload record: ${error.message}`, error.stack);
+            this.logger.error(`Failed to save image asset record: ${error.message}`, error.stack);
         });
     }
 
@@ -487,7 +515,7 @@ export class ImageUploadService {
      */
     async getUserUploads(userId: string, limit?: number, skip?: number) {
         this.logger.log(`Getting upload history for user ${userId}, limit=${limit}, skip=${skip}`);
-        return this.uploadRecordModel.find({ userId, mediaType: 'image' })
+        return this.imageAssetModel.find({ userId })
             .sort({ createdAt: -1 })
             .limit(limit || 100)
             .skip(skip || 0)
@@ -498,7 +526,7 @@ export class ImageUploadService {
      * Get a specific upload record by ID
      */
     async getRecordById(recordId: string) {
-        this.logger.log(`Getting upload record with ID: ${recordId}`);
-        return this.uploadRecordModel.findById(recordId).exec();
+        this.logger.log(`Getting image asset with ID: ${recordId}`);
+        return this.imageAssetModel.findById(recordId).exec();
     }
 }
