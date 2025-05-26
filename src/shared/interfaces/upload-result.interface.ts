@@ -1,4 +1,5 @@
 export interface UploadResult {
+  id: string; // Asset ID, prefixed with 'image-'
   url: string;
   fileSize: number;
   width: number;

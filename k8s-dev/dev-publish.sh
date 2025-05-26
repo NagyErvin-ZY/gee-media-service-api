@@ -46,8 +46,45 @@ else
   echo "Deployment '${HELM_RELEASE}' not found in namespace 'gpe'. Skipping scale down and pod wait."
 fi
 
-echo "Upgrading Helm release..."
-helm upgrade --install "${HELM_RELEASE}" "${HELM_CHART_PATH}" --set image.repository="${ECR_URL}" --set image.tag="${IMAGE_TAG}" --namespace gpe -f "${HELM_CHART_PATH}/values.yaml"
+# Load MUX credentials from environment or .env file
+if [ -f ".env" ]; then
+  echo "Loading environment variables from .env file..."
+  export $(grep -v '^#' .env | xargs)
+fi
+
+# Check for required MUX environment variables
+if [[ -z "${MUX_TOKEN_ID:-}" ]]; then
+  echo "Error: MUX_TOKEN_ID environment variable is not set"
+  exit 1
+fi
+
+if [[ -z "${MUX_TOKEN_SECRET:-}" ]]; then
+  echo "Error: MUX_TOKEN_SECRET environment variable is not set"
+  exit 1
+fi
+
+if [[ -z "${MUX_WEBHOOK_SECRET:-}" ]]; then
+  echo "Error: MUX_WEBHOOK_SECRET environment variable is not set"
+  exit 1
+fi
+
+# Check for GROQ API Key
+if [[ -z "${GROQ_API_KEY:-}" ]]; then
+  echo "Warning: GROQ_API_KEY environment variable is not set"
+  GROQ_API_KEY=""
+fi
+
+echo "Upgrading Helm release with AWS credentials, MUX settings, and GROQ API key..."
+helm upgrade --install "${HELM_RELEASE}" "${HELM_CHART_PATH}" \
+  --set image.repository="${ECR_URL}" \
+  --set image.tag="${IMAGE_TAG}" \
+  --set mux.tokenId="${MUX_TOKEN_ID}" \
+  --set mux.tokenSecret="${MUX_TOKEN_SECRET}" \
+  --set mux.webhookSecret="${MUX_WEBHOOK_SECRET}" \
+  --set groqApiKey="${GROQ_API_KEY}" \
+  --namespace gpe \
+  -f "${HELM_CHART_PATH}/values.yaml"
+
 echo "Waiting for deployment rollout to complete..."
 kubectl rollout status deployment/${HELM_RELEASE} --namespace gpe --timeout=120s
 

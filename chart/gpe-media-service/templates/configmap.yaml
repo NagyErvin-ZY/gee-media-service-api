@@ -3,9 +3,21 @@ kind: ConfigMap
 metadata:
   name: {{ include "gpe-media-service.fullname" . }}-config
 data:
+  KAFKA_BROKERS: {{ .Values.kafkaBrokers | quote }}
+  KAFKA_CLIENT_ID: {{ .Values.kafkaClientId | quote }}
   PORT: {{ .Values.port | quote }}
   LOG_LEVEL: {{ .Values.logLevel | quote }}
   MAX_FILE_SIZE: {{ .Values.maxFileSize | quote }}
   ALLOWED_IMAGE_TYPES: {{ .Values.allowedImageTypes | quote }}
   AWS_REGION: {{ .Values.awsRegion | quote }}
   AWS_S3_BUCKET: {{ .Values.awsS3Bucket | quote }}
+  MONGODB_URI: {{ .Values.mongodbUri | quote }}
+  # Groq configuration
+  GROQ_MODEL: {{ .Values.groqModel | quote }}
+  # Moderation features toggles
+  MODERATION_AWS_REKOGNITION_ENABLED: {{ .Values.moderation.features.visual.awsRekognitionEnabled | quote }}
+  MODERATION_GROQ_LLM_ENABLED: {{ .Values.moderation.features.text.groqLLMEnabled | quote }}
+  MODERATION_KEYWORD_FILTER_ENABLED: {{ .Values.moderation.features.text.keywordFilterEnabled | quote }}
+  # AWS Rekognition configuration
+  AWS_REKOGNITION_REGION: {{ .Values.moderation.aws.rekognition.region | quote }}
+  AWS_REKOGNITION_MIN_CONFIDENCE: {{ .Values.moderation.aws.rekognition.minConfidence | quote }}

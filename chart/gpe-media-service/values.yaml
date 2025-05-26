@@ -17,14 +17,28 @@ replicaCount: 1
 service:
   type: NodePort
   # NodePort for direct host access when ingress is enabled
-  nodePort: 30081
+  nodePort: 30086
   port: 3000
 
 # AWS S3 configuration
-awsAccessKeyId: ""
-awsSecretAccessKey: ""
-awsRegion: "eu-central-1"
-awsS3Bucket: "gpe-media"
+awsS3Bucket: "gpe-media-dev"
+
+# GROQ API configuration
+groqApiKey: ""
+groqModel: "gemma2-9b-it"  # Add Groq model configuration
+
+# Moderation features configuration
+moderation:
+  features:
+    visual:
+      awsRekognitionEnabled: true
+    text:
+      groqLLMEnabled: false
+      keywordFilterEnabled: false
+  aws:
+    rekognition:
+      region: "eu-central-1"
+      minConfidence: 60
 
 # Resource requests and limits
 resources: {}
@@ -41,7 +55,8 @@ logLevel: "info"
 maxFileSize: "5mb"
 allowedImageTypes: "image/jpeg,image/png,image/gif"
 
-# Ingress configuration
+mongodbUri: "mongodb://host.docker.internal:27017/media-service?directConnection=true"
+# Ingress configurationkafkaBrokers
 ingress:
   enabled: true
   className: "nginx"
@@ -54,7 +69,12 @@ ingress:
       paths:
         - path: /media-service/(.*)
           pathType: ImplementationSpecific
-  tls: [] # Example:
-  #  - secretName: chart-example-tls
-  #    hosts:
-  #      - example.local
+  tls: [] 
+kafkaBrokers: "host.docker.internal:19092"
+kafkaClientId: "post-service"
+
+mux:
+  tokenId: ""           # MUX_TOKEN_ID
+  tokenSecret: ""       # MUX_TOKEN_SECRET
+  webhookSecret: ""     # MUX_WEBHOOK_SECRET
+  publicBaseUrl: "https://gpe.dev"

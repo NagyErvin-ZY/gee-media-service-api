@@ -43,16 +43,15 @@ export type OnboardingConfig = {
 };
 
 export type KafkaConfigWithTopics = IGPEAppConfig['db']['kafka'] & {
+  topics: {
+    muxVideoAssetsTopic: string;
+  }
 };
 
 export interface AWSS3Config {
-  accessKeyId: string;
-  secretAccessKey: string;
   region: string;
   bucket: string;
   urlPrefix: string;
-  profile: string; // AWS profile name
-  useProfile: boolean; // Whether to use AWS profile instead of direct credentials
 }
 
 export interface ModerationCategory {
@@ -72,16 +71,13 @@ export interface ModerationApiConfig {
   groq: {
     apiUrl: string;
     apiKey: string;
+    model: string; // Add this field for configurable model
   };
   aws?: {
     rekognition: {
       region: string;
       minConfidence: number; // Minimum confidence threshold for moderation labels (0-100)
       moderationCategories?: string[]; // Optional specific categories to check
-      profile?: string; // AWS profile name for Rekognition
-      useProfile?: boolean; // Whether to use AWS profile instead of direct credentials
-      accessKeyId?: string; // Optional access key ID for Rekognition
-      secretAccessKey?: string; // Optional secret access key for Rekognition
     };
   };
 }
@@ -123,6 +119,16 @@ export interface UploadProfile {
   rateLimit?: UploadRateLimit; // Optional rate limiting configuration
 }
 
+export interface ModerationFeatures {
+  visual: {
+    awsRekognitionEnabled: boolean;
+  };
+  text: {
+    groqLLMEnabled: boolean;
+    keywordFilterEnabled: boolean;
+  };
+}
+
 export interface MediaConfig {
   allowedMimeTypes: string[];
   maxFileSize: number; // in bytes
@@ -131,6 +137,7 @@ export interface MediaConfig {
   moderation: {
     rules: ModerationRules;
     api: ModerationApiConfig;
+    features: ModerationFeatures; // Add this new field
   };
 }
 
@@ -150,13 +157,15 @@ export interface VideoUploadProfile {
   passThroughParams?: string[];
 }
 
-export interface GPEUserServiceConfig extends IGPEAppConfig {
+export interface GPEMediaServiceConfig extends IGPEAppConfig {
   db: IGPEAppConfig['db'] & {
     kafka: KafkaConfigWithTopics
   };
   aws: {
-    s3: AWSS3Config;
-  };
+    services: {
+      s3: AWSS3Config;
+    } & IGPEAppConfig['aws']['services'];
+  }
   media: MediaConfig;
   mux: MuxConfig;
   videoProfiles: VideoUploadProfile[];

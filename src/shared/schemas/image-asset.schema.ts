@@ -1,12 +1,11 @@
 // filepath: /Users/erwin/Documents/dev/gpe/gpe-media-service/src/shared/schemas/image-asset.schema.ts
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Schema as MongooseSchema } from 'mongoose';
-import { UploadClaim } from '../../upload-claim/schemas/upload-claim.schema';
-
-export type ModerationStatus = 'approved' | 'rejected' | 'pending' | 'skipped';
+import { UploadClaim } from '../../backend-for-frontend/upload-claim/schemas/upload-claim.schema';
+import { IImageAsset, ModerationStatus } from '@gpe/backend-common/dist/schema/media';
 
 @Schema({ timestamps: true })
-export class ImageAsset extends Document {
+export class ImageAsset extends Document implements IImageAsset {
   @Prop({ required: true })
   userId: string;
 
@@ -24,13 +23,13 @@ export class ImageAsset extends Document {
 
   @Prop()
   fileExtension?: string;
-  
+
   @Prop()
   width?: number;
 
   @Prop()
   height?: number;
-  
+
   @Prop()
   format?: string;
 
@@ -38,6 +37,7 @@ export class ImageAsset extends Document {
   storageUrl?: string;
 
   @Prop()
+  // deprecated: use storageUrl instead
   storageKey?: string;
 
   @Prop({ default: 's3' })
@@ -84,7 +84,7 @@ export class ImageAsset extends Document {
 
   @Prop()
   processingDurationMs?: number; // Time it took to process the upload
-  
+
   @Prop({ type: Object })
   resizedVersions?: {
     thumbnail?: {

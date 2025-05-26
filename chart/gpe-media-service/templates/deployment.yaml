@@ -21,26 +21,11 @@ spec:
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy | default "IfNotPresent" }}
           env:
-            - name: AWS_ACCESS_KEY_ID
+            - name: GROQ_API_KEY
               valueFrom:
                 secretKeyRef:
                   name: {{ include "gpe-media-service.fullname" . }}-secret
-                  key: AWS_ACCESS_KEY_ID
-            - name: AWS_SECRET_ACCESS_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "gpe-media-service.fullname" . }}-secret
-                  key: AWS_SECRET_ACCESS_KEY
-            - name: AWS_REGION
-              valueFrom:
-                configMapKeyRef:
-                  name: {{ include "gpe-media-service.fullname" . }}-config
-                  key: AWS_REGION
-            - name: AWS_S3_BUCKET
-              valueFrom:
-                configMapKeyRef:
-                  name: {{ include "gpe-media-service.fullname" . }}-config
-                  key: AWS_S3_BUCKET
+                  key: GROQ_API_KEY
             - name: PORT
               valueFrom:
                 configMapKeyRef:
@@ -61,7 +46,81 @@ spec:
                 configMapKeyRef:
                   name: {{ include "gpe-media-service.fullname" . }}-config
                   key: ALLOWED_IMAGE_TYPES
+            - name: KAFKA_BROKERS
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "gpe-media-service.fullname" . }}-config
+                  key: KAFKA_BROKERS
+            - name: MONGODB_URI
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "gpe-media-service.fullname" . }}-config
+                  key: MONGODB_URI
+            - name: MUX_TOKEN_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "gpe-media-service.fullname" . }}-mux-secret
+                  key: tokenId
+            - name: MUX_TOKEN_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "gpe-media-service.fullname" . }}-mux-secret
+                  key: tokenSecret
+            - name: MUX_WEBHOOK_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "gpe-media-service.fullname" . }}-mux-secret
+                  key: webhookSecret
+            - name: PUBLIC_BASE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "gpe-media-service.fullname" . }}-mux-config
+                  key: publicBaseUrl
+            # Groq model configuration
+            - name: GROQ_MODEL
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "gpe-media-service.fullname" . }}-config
+                  key: GROQ_MODEL
+            # Moderation feature toggles
+            - name: MODERATION_AWS_REKOGNITION_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "gpe-media-service.fullname" . }}-config
+                  key: MODERATION_AWS_REKOGNITION_ENABLED
+            - name: MODERATION_GROQ_LLM_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "gpe-media-service.fullname" . }}-config
+                  key: MODERATION_GROQ_LLM_ENABLED
+            - name: MODERATION_KEYWORD_FILTER_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "gpe-media-service.fullname" . }}-config
+                  key: MODERATION_KEYWORD_FILTER_ENABLED
+            # AWS Rekognition configuration
+            - name: AWS_REKOGNITION_REGION
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "gpe-media-service.fullname" . }}-config
+                  key: AWS_REKOGNITION_REGION
+            - name: AWS_REKOGNITION_MIN_CONFIDENCE
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "gpe-media-service.fullname" . }}-config
+                  key: AWS_REKOGNITION_MIN_CONFIDENCE
+          volumeMounts:
+            - name: aws-credentials
+              mountPath: /root/.aws/credentials
+              subPath: credentials
           ports:
             - containerPort: {{ .Values.port | default 3000 }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
+      volumes:
+        - name: aws-credentials
+          secret:
+            secretName: aws-credentials
+            items:
+              - key: credentials
+                path: credentials

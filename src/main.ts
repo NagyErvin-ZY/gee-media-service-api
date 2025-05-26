@@ -44,6 +44,7 @@ async function bootstrap() {
     .addTag('images', 'Image upload and management')
     .addTag('videos', 'Video upload and management')
     .addTag('upload-claim', 'Upload claim management')
+    .addTag('retrieval', 'Media asset retrieval')
     .addBearerAuth()
     .build();
   const document = SwaggerModule.createDocument(app, swaggerConfig);

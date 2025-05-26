@@ -1,5 +1,5 @@
 import { parseEnv } from '@gpe/backend-common/dist/shared/utils';
-import { GPEUserServiceConfig, MediaConfig, MuxConfig, VideoUploadProfile } from './types';
+import { GPEMediaServiceConfig, MediaConfig, MuxConfig, VideoUploadProfile } from './types';
 import 'dotenv/config';
 
 import * as winston from 'winston';
@@ -7,24 +7,25 @@ import { configDotenv } from 'dotenv';
 
 configDotenv()
 
-const config = Object.freeze<GPEUserServiceConfig>({
+const config = Object.freeze<GPEMediaServiceConfig>({
   serviceName: 'gpe-media-api-service',
   db: {
     mongo: {
-      connectionString: parseEnv<string>(process.env.MONGODB_URI, 'mongodb://localhost:27017/gpe-media-api-service')
+      connectionString: parseEnv<string>(process.env.MONGODB_URI, 'mongodb://localhost:27017/media-service?directConnection=true'),
     },
     kafka: {
       brokers: parseEnv<string>(process.env.KAFKA_BROKERS, 'localhost:19092'),
       clientId: parseEnv<string>(process.env.KAFKA_CLIENT_ID, 'gpe-media-api-service-d'),
-      consumerGroupId: "gpe-media-api-service-deploymnet-d"
+      consumerGroupId: "gpe-media-api-service-deploymnet-d",
+      topics: {
+        muxVideoAssetsTopic: parseEnv<string>(process.env.KAFKA_MUX_VIDEO_ASSETS_TOPIC, 'mux.video-assets'),
+      }
     }
   },
   auth: {
     userAuthHeader: parseEnv<string>(process.env.USER_AUTH_HEADER, 'authorization'),
     mappingTable: {
       tableName: parseEnv<string>(process.env.DYNAMODB_TABLENAME, "gpe-dev-cognito-mongo-id-map"),
-      region: parseEnv<string>(process.env.DYNAMODB_REGION, "eu-central-1"),
-      profile: parseEnv<string>(process.env.DYNAMODB_PROFILE, "gpe"),
     }
   },
   server: {
@@ -43,14 +44,18 @@ const config = Object.freeze<GPEUserServiceConfig>({
     }
   },
   aws: {
-    s3: {
-      accessKeyId: parseEnv<string>(process.env.AWS_ACCESS_KEY_ID, ''),
-      secretAccessKey: parseEnv<string>(process.env.AWS_SECRET_ACCESS_KEY, ''),
-      region: parseEnv<string>(process.env.AWS_REGION, 'eu-central-1'),
-      bucket: parseEnv<string>(process.env.AWS_S3_BUCKET, 'gpe-media-dev'),
-      urlPrefix: parseEnv<string>(process.env.AWS_S3_URL_PREFIX, 'https://gpe-media-dev.s3.eu-central-1.amazonaws.com'),
-      profile: parseEnv<string>(process.env.AWS_S3_PROFILE, 'gpe'),
-      useProfile: parseEnv<boolean>(process.env.AWS_S3_USE_PROFILE, true)
+    services: {
+      s3: {
+        region: parseEnv<string>(process.env.AWS_REGION, 'eu-central-1'),
+        bucket: parseEnv<string>(process.env.AWS_S3_BUCKET, 'gpe-media-dev'),
+        urlPrefix: parseEnv<string>(process.env.AWS_S3_URL_PREFIX, 'https://gpe-media-dev.s3.eu-central-1.amazonaws.com'),
+      },
+      secretsManager: {
+        region: parseEnv<string>(process.env.AWS_REGION, 'eu-north-1'),
+      },
+      dynamodb: {
+        region: parseEnv<string>(process.env.AWS_REGION, 'eu-central-1'),
+      }
     }
   },
   media: {
@@ -134,16 +139,22 @@ const config = Object.freeze<GPEUserServiceConfig>({
         groq: {
           apiUrl: parseEnv<string>(process.env.GROQ_API_URL, "https://api.groq.com/v1/inference"),
           apiKey: parseEnv<string>(process.env.GROQ_API_KEY, ""),
+          model: parseEnv<string>(process.env.GROQ_MODEL, "gemma2-9b-it"),
         },
         aws: {
           rekognition: {
             region: parseEnv<string>(process.env.AWS_REKOGNITION_REGION, process.env.AWS_REGION || "eu-central-1"),
             minConfidence: parseEnv<number>(process.env.AWS_REKOGNITION_MIN_CONFIDENCE, 60),
-            useProfile: parseEnv<boolean>(process.env.AWS_REKOGNITION_USE_PROFILE, true),
-            profile: parseEnv<string>(process.env.AWS_REKOGNITION_PROFILE, "gpe"),
-            accessKeyId: parseEnv<string>(process.env.AWS_REKOGNITION_ACCESS_KEY_ID, ''),
-            secretAccessKey: parseEnv<string>(process.env.AWS_REKOGNITION_SECRET_ACCESS_KEY, '')
           }
+        }
+      },
+      features: {
+        visual: {
+          awsRekognitionEnabled: parseEnv<boolean>(process.env.MODERATION_AWS_REKOGNITION_ENABLED, true),
+        },
+        text: {
+          groqLLMEnabled: parseEnv<boolean>(process.env.MODERATION_GROQ_LLM_ENABLED, false),
+          keywordFilterEnabled: parseEnv<boolean>(process.env.MODERATION_KEYWORD_FILTER_ENABLED, false),
         }
       }
     }
@@ -152,7 +163,7 @@ const config = Object.freeze<GPEUserServiceConfig>({
     tokenId: parseEnv<string>(process.env.MUX_TOKEN_ID, ''),
     tokenSecret: parseEnv<string>(process.env.MUX_TOKEN_SECRET, ''),
     webhookSecret: parseEnv<string>(process.env.MUX_WEBHOOK_SECRET, ''),
-    publicBaseUrl: parseEnv<string>(process.env.PUBLIC_BASE_URL, 'https://api.example.com')
+    publicBaseUrl: parseEnv<string>(process.env.PUBLIC_BASE_URL, 'https://gpe.com'),
   },
   videoProfiles: [
     {
